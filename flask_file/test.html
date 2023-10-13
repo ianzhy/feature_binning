@@ -177,6 +177,11 @@ option = {
           return value + '('+(value/data.info.total*100).toFixed(1)+'%)';
         }
       },
+      emphasis: {
+        itemStyle:{
+          color:'#73c0de'
+        }
+      }
       // data: nobs
     },
     {
@@ -187,13 +192,7 @@ option = {
         valueFormatter: function (value) {
           return (value*100).toFixed(1)  + ' %';
         }
-      },
-      emphasis: {
-        itemStyle:{
-          opacity: 0.1
-        }
       }
-
       // data: badrate
     }
   ]

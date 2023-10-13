@@ -86,6 +86,7 @@ var RangeSlider = /*#__PURE__*/function () {
     this.documentMouseMoveHandler = this.documentMouseMoveHandler.bind(this);
     this.selectedPointIndex = -1;
     this.changeHandlers = [];
+    this.mouseOverHandlers = [];
     return this;
   }
   /**
