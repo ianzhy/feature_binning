@@ -1,0 +1,206 @@
+
+
+<head>
+  <link rel="stylesheet" href="{{ url_for('static', filename='range-slider.css') }}">
+  <!-- jquery -->
+  <script src="https://cdn.bootcss.com/jquery/3.6.0/jquery.min.js"></script>
+  <script src="{{ url_for('static', filename='echarts.min.js') }}"></script>
+  <!-- local src -->
+  <script src="{{ url_for('static', filename='range-slider.js') }}"></script>
+</head>
+<body>
+  
+  
+  
+  <h1>splits iv: <span id="iv"></span></h1>
+  <div class="slider"></div>
+  <h1>chart</h1>
+  <div id="chart1" style="width: 600px;height:400px;"></div>
+  
+  <script>
+    function getUrlParam(name) {
+      var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+      var r = window.location.search.substr(1).match(reg);
+      if (r != null) return decodeURI(r[2]); return null;
+    }
+
+
+    var data = {{ data }};
+    var slider_xtype = getUrlParam('xtype') || 'linear' ;
+    var slider_step = Number(getUrlParam('step') || '0.1' );
+    
+    let slider = new RangeSlider('.slider',{
+      "values":data.info.splits,
+      "xtype":slider_xtype,
+      "step":slider_step,
+      "min":data.info.min,
+      "max":data.info.max
+    });
+    console.log(data);
+    console.log(slider_xtype);
+
+    slider.onChange(function(){
+      if(slider.getValues().sort().toString() ===data.info.splits.sort().toString()){
+        console.log("equal");
+      }else{
+        console.log("not equal");
+        new_splits = slider.getValues();
+        data.info.splits = new_splits;
+        console.log(new_splits);
+        $.ajax({
+          url: "/test?var="+data.info.var,
+          type: "POST",
+          data: JSON.stringify(new_splits),
+          contentType: "application/json; charset=utf-8",
+          dataType: "json",
+          success: function (data) {
+            console.log(data);
+            update_data(data);
+          },
+          error: function (message) {
+            console.log(message);
+          }
+        });
+      }
+    
+    });
+
+
+function update_data(data){
+  $("#iv").text(data.info.iv.toFixed(4));
+  chart1.setOption({
+    xAxis: [
+      {
+        data: data.df.map(function(item){return item.interval}),
+      }
+    ],
+    series: [
+      {
+        data: data.df.map(function(item){return item.nobs})
+      },
+      {
+        data: data.df.map(function(item){return item.bad_rate})
+      }
+    ]
+  });
+}
+
+
+
+
+
+var chart1 = echarts.init(document.getElementById('chart1'));
+
+
+// echart
+option = {
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: {
+      type: 'cross',
+      crossStyle: {
+        color: '#999'
+      }
+    }
+  },
+  toolbox: {
+    feature: {
+      dataView: { show: true, readOnly: false },
+      // magicType: { show: true, type: ['line', 'bar'] },
+      // restore: { show: true },
+      saveAsImage: { show: true }
+    }
+  },
+  dataZoom: [
+    {
+        id: 'dataZoomX1',
+        type: 'slider',
+        xAxisIndex: 0,
+        filterMode: 'none'
+    },
+
+    {
+        id: 'dataZoomY1',
+        type: 'slider',
+        yAxisIndex: 0,
+        left: 0,
+        filterMode: 'none'
+    },
+    {
+        id: 'dataZoomY2',
+        type: 'slider',
+        yAxisIndex: 1,
+        filterMode: 'none'
+    }
+  ],
+
+  legend: {
+    data: ['Nobs', 'BadRate']
+  },
+  xAxis: [
+    {
+      type: 'category',
+      // data: intervals,
+      axisPointer: {
+        type: 'shadow'
+      }
+    }
+  ],
+  yAxis: [
+    {
+      type: 'value',
+      name: 'Nobs',
+      min: 0,
+      // // max: 250,
+      // interval: 500,
+      axisLabel: {
+        formatter: '{value} '
+      }
+    },
+    {
+      type: 'value',
+      name: 'BadRate',
+      min: 0,
+      // max: "100%",
+      // interval: 5,
+      axisLabel: {
+        formatter: function(value){return (value*100).toFixed(1) + ' %'}
+      }
+    }
+  ],
+  series: [
+    {
+      name: 'Nobs',
+      type: 'bar',
+      tooltip: {
+        valueFormatter: function (value) {
+          return value + '('+(value/data.info.total*100).toFixed(1)+'%)';
+        }
+      },
+      // data: nobs
+    },
+    {
+      name: 'BadRate',
+      type: 'line',
+      yAxisIndex: 1,
+      tooltip: {
+        valueFormatter: function (value) {
+          return (value*100).toFixed(1)  + ' %';
+        }
+      },
+      emphasis: {
+        itemStyle:{
+          opacity: 0.1
+        }
+      }
+
+      // data: badrate
+    }
+  ]
+};
+
+chart1.setOption(option);
+update_data(data);
+
+  </script>
+</body>
