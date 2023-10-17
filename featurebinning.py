@@ -10,14 +10,20 @@
 
 from concurrent.futures import thread
 
+import sys
 import os
 import pathlib
+import re
 import pandas as pd
 import numpy as np
 import threading
 import json
+from contextlib import redirect_stderr,redirect_stdout
+
 from flask import Flask, jsonify, render_template,request,Markup
 # from flask_signal import signal
+
+
 
 class WideTable:
     def __init__(self,df,bin_cache_file="./bin_info.csv"):
@@ -84,7 +90,8 @@ class WideTable:
         app = Flask("binning_server",static_folder= pkg_dir / "flask_file", template_folder=pkg_dir / "flask_file",static_url_path="/static")
         app.config["ENV"] = "development"
         app.config["TEMPLATES_AUTO_RELOAD"] = True
-        
+       
+
         @app.route("/",methods=["GET"])
         def index():
             return jsonify("feture binning server")
@@ -106,8 +113,10 @@ class WideTable:
             else:
                 var = request.args.get("var","")
                 splits = json.loads(request.data)
+                print("splits:\t",splits)
                 stats, info = self.var_stat(var,splits)
-                print(stats,info)
+                print(stats)
+                print(info)
                 return jsonify({"df":stats.to_dict(orient="records"),"info":info})
 
         @app.route('/shutdown',methods=['GET'])
@@ -118,12 +127,15 @@ class WideTable:
             func()
             return 'Server shutting down...'
 
-        self.app = app
+        def run_server(*args,**kwargs):
+            with redirect_stdout(open("./binning_flask_server.log", "a")), redirect_stderr(sys.stdout):
+                app.run(*args,**kwargs)
 
-        self.t=threading.Thread(target=app.run,kwargs={'port':50000})
-        self.t.setDaemon(True)
-        self.t.start()
-        print('running')
+
+        t=threading.Thread(target=run_server,kwargs={'port':50000,**kwargs})
+        t.setDaemon(True)
+        t.start()
+        print(f'server running on {kwargs.get("host","127.0.0.1")}:{kwargs.get("port",50000)}')
         # app.run(host="0.0.0.0",port=50000)
 
 
