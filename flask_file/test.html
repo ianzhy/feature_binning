@@ -3,7 +3,7 @@
 <head>
   <link rel="stylesheet" href="{{ url_for('static', filename='range-slider.css') }}">
   <!-- jquery -->
-  <script src="https://cdn.bootcss.com/jquery/3.6.0/jquery.min.js"></script>
+  <script src="{{ url_for('static', filename='jquery.min.js') }}"></script>
   <script src="{{ url_for('static', filename='echarts.min.js') }}"></script>
   <!-- local src -->
   <script src="{{ url_for('static', filename='range-slider.js') }}"></script>
@@ -11,9 +11,13 @@
 <body>
   
   
-  
-  <h1>splits iv: <span id="iv"></span></h1>
+  <div class="info" >
+    <h1>splits iv: <span id="iv"></span>  </h1> 
+    <h3>xtype: <span id="xtype"></span>    min: <span id="min"></span>    max: <span id="max"></span>    step: <span id="step"></span></h3>
+  </div>
+
   <div class="slider"></div>
+
   <h1>chart</h1>
   <div id="chart1" style="width: 600px;height:400px;"></div>
   
@@ -24,17 +28,20 @@
       if (r != null) return decodeURI(r[2]); return null;
     }
 
+    inf = Infinity;
 
     var data = {{ data }};
     var slider_xtype = getUrlParam('xtype') || 'linear' ;
     var slider_step = Number(getUrlParam('step') || '0.1' );
+    var slider_min = Number(getUrlParam('min') || data.info.min );
+    var slider_max = Number(getUrlParam('max') || data.info.max );
     
     let slider = new RangeSlider('.slider',{
       "values":data.info.splits,
       "xtype":slider_xtype,
       "step":slider_step,
-      "min":data.info.min,
-      "max":data.info.max
+      "min":slider_min,
+      "max":slider_max
     });
     console.log(data);
     console.log(slider_xtype);
@@ -53,11 +60,13 @@
           data: JSON.stringify(new_splits),
           contentType: "application/json; charset=utf-8",
           dataType: "json",
-          success: function (data) {
-            console.log(data);
-            update_data(data);
+          success: function (rsp) {
+            console.log("update data success");
+            console.log(rsp.df);
+            update_data(rsp);
           },
           error: function (message) {
+            console.log("update data error");
             console.log(message);
           }
         });
@@ -68,6 +77,10 @@
 
 function update_data(data){
   $("#iv").text(data.info.iv.toFixed(4));
+  $("#xtype").text(slider_xtype);
+  $("#min").text(slider_min.toFixed(4));
+  $("#max").text(slider_max.toFixed(4));
+  $("#step").text(slider_step);
   chart1.setOption({
     xAxis: [
       {
