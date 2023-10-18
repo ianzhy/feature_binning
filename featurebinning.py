@@ -2,7 +2,7 @@
 ###
 # Project: feature_binning
 # Created Date: Friday, October 13th 2023, 2:38:37 pm
-# Last Modified: Tue Oct 17 2023
+# Last Modified: Wed Oct 18 2023
 # Modified By: !an
 # Author: !an <ianzy@outlook.com>
 ###
@@ -21,34 +21,57 @@ import json
 from contextlib import redirect_stderr,redirect_stdout
 
 from flask import Flask, jsonify, render_template,request,Markup
-# from flask_signal import signal
 
+import logging
+from logging.config import dictConfig
+
+
+dictConfig({
+    'version': 1,
+    'handlers': {
+        'file.handler': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': 'binning_flask_server.log',
+            'maxBytes': 4194304,  # 4 MB
+            'backupCount': 0,
+            'level': "DEBUG",
+        },
+    },
+    'loggers': {
+        'werkzeug': {
+            'level': "DEBUG",
+            'handlers': ['file.handler'],
+        },
+    },
+})
 
 
 class WideTable:
     def __init__(self,df,bin_cache_file="./bin_info.csv"):
-        self.df = df
+        self.df = df.loc[df["target"].notnull()]
         if os.path.exists(bin_cache_file):
             self.bin_info = pd.read_csv(bin_cache_file,index_col=0)
         else:
             self.bin_info = pd.DataFrame(columns=range(50))
 
-    def var_stat(self,var,splits=None,qcut=None):
+        self.logger = logging.getLogger("werkzeug")
+
+    def var_stat(self,var,splits=None,qcut=None,update_bin=True):
         min_edge,max_edge = self.df[var].replace([np.inf,-np.inf],[np.nan,np.nan]).apply(["min","max"])
-        min_edge,max_edge = min_edge-1,max_edge+1
         if qcut is not None:
-            categories, bins = pd.qcut(self.df[var], qcut, retbins=True,duplicates="drop")
+            categories, bins = pd.qcut(self.df[var], qcut,retbins=True,duplicates="drop")
         elif splits is not None: 
             bins = [min_edge] + sorted(splits) + [max_edge]
             bins = np.unique(bins)
-            categories = pd.cut(self.df[var], bins=bins)
+            categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         elif var in self.bin_info.index:
             bins = self.bin_info.loc[var].dropna().drop_duplicates().values
-            categories = pd.cut(self.df[var], bins=bins)
+            categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         else:
             categories, bins = pd.qcut(self.df[var], 20, retbins=True,duplicates="drop")
 
-        self.update_bin(var,bins)
+        if update_bin:
+            self.update_bin(var,bins)
                 
         
         stats = self.df.groupby(categories.cat.codes).agg({"target":[
@@ -80,7 +103,7 @@ class WideTable:
     
     def update_bin(self,var,bins):
         self.bin_info.loc[var] = np.nan
-        self.bin_info.loc[var,range(len(bins))] = bins
+        self.bin_info.loc[var].iloc[:len(bins)] = bins
         
         self.bin_info.to_csv("./bin_info.csv")
 
@@ -113,10 +136,10 @@ class WideTable:
             else:
                 var = request.args.get("var","")
                 splits = json.loads(request.data)
-                print("splits:\t",splits)
+                self.logger.log(logging.DEBUG,"splits:\t"+str(splits))
                 stats, info = self.var_stat(var,splits)
-                print(stats)
-                print(info)
+                self.logger.log(logging.DEBUG,stats)
+                self.logger.log(logging.DEBUG,info)
                 return jsonify({"df":stats.to_dict(orient="records"),"info":info})
 
         @app.route('/shutdown',methods=['GET'])
@@ -127,12 +150,10 @@ class WideTable:
             func()
             return 'Server shutting down...'
 
-        def run_server(*args,**kwargs):
-            with redirect_stdout(open("./binning_flask_server.log", "a")), redirect_stderr(sys.stdout):
-                app.run(*args,**kwargs)
 
 
-        t=threading.Thread(target=run_server,kwargs={'port':50000,**kwargs})
+
+        t=threading.Thread(target=app.run,kwargs={'port':50000,**kwargs})
         t.setDaemon(True)
         t.start()
         print(f'server running on {kwargs.get("host","127.0.0.1")}:{kwargs.get("port",50000)}')

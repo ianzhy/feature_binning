@@ -87,6 +87,7 @@ var RangeSlider = /*#__PURE__*/function () {
     this.selectedPointIndex = -1;
     this.changeHandlers = [];
     this.mouseOverHandlers = [];
+    this.mouseOutHandlers = [];
     return this;
   }
   /**
@@ -344,15 +345,21 @@ var RangeSlider = /*#__PURE__*/function () {
   }, {
     key: "pointMouseoverHandler",
     value: function pointMouseoverHandler(e, index) {
-      var transparentColor = RangeSlider.addTransparencyToColor(this.points[index].style.backgroundColor, 16);
+      let _this = this;
+      var transparentColor = RangeSlider.addTransparencyToColor(_this.points[index].style.backgroundColor, 16);
 
-      if (this.selectedPointIndex < 0) {
-        this.points[index].style.boxShadow = "0px 0px 0px ".concat(Math.floor(this.allProps.pointRadius / 1.5), "px ").concat(transparentColor);
+      if (_this.selectedPointIndex < 0) {
+        _this.points[index].style.boxShadow = "0px 0px 0px ".concat(Math.floor(_this.allProps.pointRadius / 1.5), "px ").concat(transparentColor);
       }
 
-      this.tooltip.style.transform = "translate(-50%, -60%) scale(1)";
-      this.tooltip.style.left = "".concat(this.points[index].value_pct + "%");
-      this.tooltip.textContent = this.transformFuncInv(this.points[index].value);
+      _this.tooltip.style.transform = "translate(-50%, -60%) scale(1)";
+      _this.tooltip.style.left = "".concat(_this.points[index].value_pct + "%");
+      _this.tooltip.textContent = _this.transformFuncInv(_this.points[index].value);
+      // console.log("mouse over on point: "+index);
+      // console.log(_this.getValueByIndex(index));
+      _this.mouseOverHandlers.forEach(function (func) {
+        return func(index,_this.getValueByIndex(index));
+      });
     }
     /**
      * Add transparency for rgb, rgba or hex color
@@ -369,9 +376,14 @@ var RangeSlider = /*#__PURE__*/function () {
      * @param {number} index
      */
     function pointMouseOutHandler(e, index) {
-      if (this.selectedPointIndex < 0) {
-        this.points[index].style.boxShadow = "none";
-        this.tooltip.style.transform = "translate(-50%, -60%) scale(0)";
+      let _this=this;
+      if (_this.selectedPointIndex < 0) {
+        _this.points[index].style.boxShadow = "none";
+        _this.tooltip.style.transform = "translate(-50%, -60%) scale(0)";
+        // console.log("mouse out on point: "+index);
+        _this.mouseOutHandlers.forEach(function (func) {
+          return func(index,_this.getValueByIndex(index));
+        });
       }
     }
     /**
@@ -417,6 +429,13 @@ var RangeSlider = /*#__PURE__*/function () {
       return this.points.map(function (point) {
         return _this.transformFuncInv(point.value);
       });
+    }
+
+  },{
+    key: "getValueByIndex",
+    value: function getValueByIndex(index) {
+      _this = this;
+      return _this.transformFuncInv(_this.points[index].value);
     }
 
 
