@@ -9,19 +9,36 @@
 
 <body>
   <div class="info" >
-    <h3 style="float:left">splits iv: <span id="iv"></span> </h3>
-    <h4 style="float:right">xtype: <span id="xtype"></span> min: <span id="min"></span> max: <span id="max"></span> step: <span
-        id="step"></span></h4>
+    <h3 style="float: left">splits iv: <span id="iv"></span> 
+      <!-- qcut button with warning, float left -->
+      <button id="qcut" style="margin-left:100px">qcut</button>
+      <input type="number" id="qcut_num" value="10" step="1" style="width:40px">
+
+    </h3> 
+    <h4 style="float:right; margin-right: 50px;">
+      <!-- reset button -->
+      <button id="reset_">set xAxis</button>
+
+
+      <!-- number input for min -->
+      min: <input type="number" id="min_" value="0.0" style="width: 60px;">
+      max: <input type="number" id="max_"  value="1.0" style="width: 60px;"> 
+      step: <input type="number" id="step_" step="0.01" value="0.01" style="width: 60px;">
+    </h4>
   </div>
   <div>
     <br><br>
   </div>
   <div class="slider"></div>
 
-  <h4>splits: <span id="splits"></span></h4>
   <!-- <h3>chart</h3> -->
-  <div id="chart1" style="width: 600px;height:400px;"></div>
-
+  <div class="chart_container">
+    <div id="chart1" style="width: 600px;height:400px; float:left; margin-right:50px"></div>
+    <table id="splits",style="float:left">
+      <tr><th>splits:</th></tr>
+    </table>
+  </div>
+  
   <script>
     function getUrlParam(name) {
       var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
@@ -55,25 +72,48 @@
     inf = Infinity;
 
     var data = {{ data }};
-    var slider_xtype = getUrlParam('xtype') || 'linear';
     var slider_step = Number(getUrlParam('step') || 0.01);//Math.min(...data.info.splits.map(v => getPrecision(v))));
     var slider_min = Number(getUrlParam('min') || data.info.min);
     var slider_max = Number(getUrlParam('max') || data.info.max);
 
     let slider = new RangeSlider('.slider', {
       "values": data.info.splits,
-      "xtype": slider_xtype,
       "step": slider_step,
       "min": slider_min,
       "max": slider_max
     });
     console.log(data);
 
+    $("#reset_").click(function () {
+      slider_min = Number($("#min_").val());
+      slider_max = Number($("#max_").val());
+      slider_step = Number($("#step_").val());
+      slider.setOption({
+        "step": slider_step,
+        "min": slider_min,
+        "max": slider_max
+      });
+    });
 
-    $("#xtype").text(slider_xtype);
-    $("#min").text(slider_min.toFixed(4));
-    $("#max").text(slider_max.toFixed(4));
-    $("#step").text(slider_step);
+    $("#qcut").click(function () {
+      let qcut_num = Number($("#qcut_num").val());
+      $.ajax({
+        url: "/qcut?var=" + data.info.var,
+        type: "POST",
+        data: JSON.stringify({"qcut_num":qcut_num}),
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        success: function (rsp) {
+          console.log("update data success");
+          update_data(rsp);
+        },
+        error: function (message) {
+          console.log("update data error");
+          console.log(message);
+        }
+      });
+    });
+
 
     slider.onChange(function () {
       if (slider.getValues().sort().toString() === data.info.splits.sort().toString()) {
@@ -106,7 +146,17 @@
     function update_data(rsp) {
       data = rsp;
       $("#iv").text(data.info.iv.toFixed(4));
-      $("#splits").text(data.info.splits.reduce((a, b) => a + ', ' + b));
+      // data.info.splits: update splits table
+      $("#splits").empty();
+      $("#splits").append("<tr><th>splits:</th></tr>");
+      for (let i = 0; i < data.info.splits.length; i++) {
+        $("#splits").append("<tr><td>" + data.info.splits[i] + "</td></tr>");
+      }
+
+      $("#min_").val(slider_min);
+      $("#max_").val(slider_max);
+      $("#step_").val(slider_step);
+
       chart1.setOption({
         xAxis: [
           {

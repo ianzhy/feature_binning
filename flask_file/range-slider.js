@@ -72,7 +72,7 @@ var RangeSlider = /*#__PURE__*/function () {
       values: _toConsumableArray(props.values || this.defaultProps.values),
       colors: _objectSpread(_objectSpread({}, this.defaultProps.colors), props.colors)
     });
-    this.transform();
+  
 
     this.container = this.initContainer(selector);
 
@@ -98,25 +98,24 @@ var RangeSlider = /*#__PURE__*/function () {
 
 
   _createClass(RangeSlider, [{
-    key: "transform",
-    value: function transform() {
-      
-      if(this.allProps.xtype==="log"){
-        this.transformFunc = Math.log;
-        this.transformFuncInv = a=>roundToStep(Math.exp(a),this.allProps.step);
-      }else if(this.allProps.xtype==="exp"){
-        this.transformFunc = Math.exp;
-        this.transformFuncInv = a=>roundToStep(Math.log(a),this.allProps.step);
-      }else{                        // fall back to linear
-        this.transformFunc = a=>a;
-        this.transformFuncInv = a=>roundToStep(a,this.allProps.step);
-      }
 
-      this.allProps.min = this.transformFunc(this.allProps.min);
-      this.allProps.max = this.transformFunc(this.allProps.max);
-      this.allProps.values = this.allProps.values.map(this.transformFunc);
-
+    key: "setOption",
+    value: function setOption(option) {
+      _this = this;
+      // _this.allProps.xtype = option.xtype;
+      _this.allProps.min = option.min;
+      _this.allProps.max = option.max;
+      _this.allProps.step = Number(option.step);
+      console.log(_this.allProps)
+      _this.points.forEach(function (point) {
+        point.value_pct = ((point.value - _this.allProps.min) / (_this.allProps.max - _this.allProps.min) * 100).toFixed(1);
+        point.style.left = "".concat(point.value_pct, "%");
+      });
+      console.log(option);
     }
+    /**
+     * Initialize Rail
+     */
   
   }, {
     key: "initContainer",
@@ -141,9 +140,9 @@ var RangeSlider = /*#__PURE__*/function () {
       rail.style.height = this.allProps.railHeight + "px";
       rail.style.top = this.allProps.pointRadius + "px";
 
-      // rail.addEventListener("click", function (e) {
-      //   return _this3.railClickHandler(e);
-      // });
+      rail.addEventListener("click", function (e) {
+        return _this3.railClickHandler(e);
+      });
 
       rail.addEventListener("dblclick", function (e) {
         return _this3.railDblclickHandler(e);
@@ -238,7 +237,7 @@ var RangeSlider = /*#__PURE__*/function () {
       });
 
       this.tooltip.style.left = "".concat(this.points[this.selectedPointIndex].value_pct,"%");
-      this.tooltip.textContent = this.transformFuncInv(this.points[this.selectedPointIndex].value);
+      this.tooltip.textContent = roundToStep(this.points[this.selectedPointIndex].value, this.allProps.step);
     }
     /**
      * Redraw on rail click
@@ -252,7 +251,7 @@ var RangeSlider = /*#__PURE__*/function () {
 
       this.tooltip.style.transform = "translate(-50%, -60%) scale(1)";
       this.tooltip.style.left = "".concat(percent,"%");
-      this.tooltip.textContent = this.transformFuncInv(this.transformFuncInv(value));
+      this.tooltip.textContent = roundToStep(value, this.allProps.step);
     }
     /**
      * Find the closest possible point position fro current mouse position
@@ -354,7 +353,7 @@ var RangeSlider = /*#__PURE__*/function () {
 
       _this.tooltip.style.transform = "translate(-50%, -60%) scale(1)";
       _this.tooltip.style.left = "".concat(_this.points[index].value_pct + "%");
-      _this.tooltip.textContent = _this.transformFuncInv(_this.points[index].value);
+      _this.tooltip.textContent = roundToStep(_this.points[index].value, _this.allProps.step);
       // console.log("mouse over on point: "+index);
       // console.log(_this.getValueByIndex(index));
       _this.mouseOverHandlers.forEach(function (func) {
@@ -426,16 +425,13 @@ var RangeSlider = /*#__PURE__*/function () {
     key: "getValues",
     value: function getValues() {
       _this = this;
-      return this.points.map(function (point) {
-        return _this.transformFuncInv(point.value);
-      });
+      return _this.points.map(point => roundToStep(point.value, _this.allProps.step));
     }
 
   },{
     key: "getValueByIndex",
     value: function getValueByIndex(index) {
-      _this = this;
-      return _this.transformFuncInv(_this.points[index].value);
+      return roundToStep(this.points[index].value, this.allProps.step);
     }
 
 

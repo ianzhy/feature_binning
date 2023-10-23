@@ -2,7 +2,7 @@
 ###
 # Project: feature_binning
 # Created Date: Friday, October 13th 2023, 2:38:37 pm
-# Last Modified: Wed Oct 18 2023
+# Last Modified: Mon Oct 23 2023
 # Modified By: !an
 # Author: !an <ianzy@outlook.com>
 ###
@@ -66,6 +66,7 @@ class WideTable:
             categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         elif var in self.bin_info.index:
             bins = self.bin_info.loc[var].dropna().drop_duplicates().values
+            bins[0],bins[-1] = self.df[var].apply(["min","max"])   # 调整下上下限
             categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         else:
             categories, bins = pd.qcut(self.df[var], 20, retbins=True,duplicates="drop")
@@ -101,6 +102,32 @@ class WideTable:
                 
         return stats, info
     
+    def var_woe(self,var):
+        if var not in self.bin_info.index:
+            raise Exception("variable not in bin_info")
+        bins = self.bin_info.loc[var].dropna().drop_duplicates().values
+        bins[0],bins[1] = self.df[var].apply(["min","max"])   # 调整下上下限
+        categories = pd.cut(var,bins,include_lowest=True,duplicate="drop")
+        var_bin = categories.cat.codes
+        bin_labels = {i:label for i,label in enumerate(categories.cat.categories.astype(str))}
+        count = self.df.groupby(var_bin).agg({"target":[
+            "count",                # number of observations
+            # "mean",                 # bad_rate
+            lambda x:(x==1).sum(),  # number of bads
+            lambda x:(x==0).sum(),  # number of goods
+        ]})
+        count.columns = "total,bad,good".split(",")
+        rate = count/count.sum()
+        woe = np.log((rate["bad"]+0.001)/(rate["good"]+0.001))
+        small_bin = rate["total"]<0.005
+        if small_bin.any():
+            print("woes set to zero for very small bins")
+            print(count.loc[small_bin])
+        woe.loc[small_bin] = 0
+        var_woe = pd.Series(woe.loc[var_bin].values,index=var_bin.index)
+        return var_bin,var_woe,bin_labels
+
+
     def update_bin(self,var,bins):
         self.bin_info.loc[var] = np.nan
         self.bin_info.loc[var].iloc[:len(bins)] = bins
@@ -169,74 +196,7 @@ if __name__ == "__main__":
     data1.head()
     wt = WideTable(data1)
 
+    wt.run_app()
 
-    app = Flask("data_server",static_folder="./flask_file",template_folder="./flask_file",static_url_path="/static")
-
-    DATA = {"data1":data1}
-
-    @app.route("/",methods=["GET"])
-    def index():
-        return jsonify("feture binning server")
-
-    @app.route("/data_list",methods=["GET"])
-    def get_data():
-        return jsonify(list(DATA.keys()))
-
-    @app.route("/data_desc/<data_name>",methods=["GET"])
-    def get_data_desc(data_name):
-        desc = {
-            "shape":str(DATA[data_name].shape),
-            "columns":str(DATA[data_name].columns),
-            "indexs":str(DATA[data_name].index),
-        }
-        return jsonify(desc)
-
-    @app.route("/data1/<ind>/<col>",methods=["GET"])
-    def get_data_by_key(ind,col):
-        return jsonify(str(DATA['data1'].loc[ind,col]))
-
-    @app.route("/data_set/<key>/<value>",methods=["GET"])
-    def set_data_by_key(key,value):
-        DATA[key] = value
-        return jsonify("ok")
-
-    @app.route("/test",methods=["GET","POST"])
-    def test():
-        if request.method == "GET":
-            var = request.args.get("var")
-            qcut = request.args.get("qcut",None)
-            if qcut is not None: 
-                stats, info = wt.var_stat(var,qcut=int(qcut))
-            else:
-                stats, info = wt.var_stat(var)
-            return render_template(
-                "test.html",
-                data=Markup({"df":stats.to_dict(orient="records"),"info":info})
-            )
-        else:
-            var = request.args.get("var","")
-            splits = json.loads(request.data)
-            stats, info = wt.var_stat(var,splits)
-            print(stats,info)
-            return jsonify({"df":stats.to_dict(orient="records"),"info":info})
-
-    @app.route("/cut",methods=["POST"])
-    def data_cut():
-        var = request.args.get("var")
-        splits = json.loads(request.data)
-        if isinstance(splits,int):
-            stats, info = wt.var_stat(var,qcut=splits)
-        else:
-            stats, info = wt.var_stat(var,splits=splits)
-        return jsonify({"df":stats.to_dict(orient="records"),"info":info})
-
-
-
-    app.config["ENV"] = "development"
-    app.config["TEMPLATES_AUTO_RELOAD"] = True
-    # t=threading.Thread(target=app.run,kwargs={'port':50000})
-    # t.start()
-    # print('running')
-    app.run(host="0.0.0.0",port=50000)
-
+  
 
