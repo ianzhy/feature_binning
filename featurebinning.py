@@ -2,7 +2,7 @@
 ###
 # Project: feature_binning
 # Created Date: Friday, October 13th 2023, 2:38:37 pm
-# Last Modified: Mon Oct 23 2023
+# Last Modified: Wed Oct 25 2023
 # Modified By: !an
 # Author: !an <ianzy@outlook.com>
 ###
@@ -61,12 +61,13 @@ class WideTable:
         if qcut is not None:
             categories, bins = pd.qcut(self.df[var], qcut,retbins=True,duplicates="drop")
         elif splits is not None: 
-            bins = [min_edge] + sorted(splits) + [max_edge]
+            bins = [min_edge-0.001] + sorted(splits) + [max_edge+0.001]
             bins = np.unique(bins)
             categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         elif var in self.bin_info.index:
             bins = self.bin_info.loc[var].dropna().drop_duplicates().values
-            bins[0],bins[-1] = self.df[var].apply(["min","max"])   # 调整下上下限
+            bins[0] = min(self.df[var].min()-0.001,bins[0])   # 调整下上下限
+            bins[-1] = max(self.df[var].max()+0.001,bins[-1])
             categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
         else:
             categories, bins = pd.qcut(self.df[var], 20, retbins=True,duplicates="drop")
@@ -88,9 +89,9 @@ class WideTable:
         stats["iv"] = stats["woe"]*(stats["bad"]/total_bad-stats["good"]/total_good)
         
         stats["interval"] = stats["bin"].map(lambda x:str(categories.cat.categories[x]) if x>=0 else "N/A") 
-        splits = list(categories.cat.categories.left)[1:]
-        if splits[0] < min_edge: splits[0] = min_edge
-        if splits[-1] > max_edge: splits[-1] = max_edge
+        splits = list(categories.cat.categories.right)[:-1]
+        # if splits[0] < min_edge: splits[0] = min_edge
+        # if splits[-1] > max_edge: splits[-1] = max_edge
         info = {
             "var":var,
             "splits":splits, # left edge not needed, only the splits
@@ -101,16 +102,17 @@ class WideTable:
         }
                 
         return stats, info
-    
-    def var_woe(self,var):
+
+    def var_woe(self,data,var):
         if var not in self.bin_info.index:
-            raise Exception("variable not in bin_info")
+            raise Exception(f"{var} not in bin_info")
         bins = self.bin_info.loc[var].dropna().drop_duplicates().values
-        bins[0],bins[1] = self.df[var].apply(["min","max"])   # 调整下上下限
-        categories = pd.cut(var,bins,include_lowest=True,duplicate="drop")
+        bins[0] = round(min(data[var].min()-0.001,bins[0]),8)   # 调整下上下限
+        bins[-1] = round(max(data[var].max()+0.001,bins[-1]),8)
+        categories = pd.cut(data[var],bins,include_lowest=True)
         var_bin = categories.cat.codes
         bin_labels = {i:label for i,label in enumerate(categories.cat.categories.astype(str))}
-        count = self.df.groupby(var_bin).agg({"target":[
+        count = data.groupby(var_bin).agg({"target":[
             "count",                # number of observations
             # "mean",                 # bad_rate
             lambda x:(x==1).sum(),  # number of bads
@@ -124,7 +126,7 @@ class WideTable:
             print("woes set to zero for very small bins")
             print(count.loc[small_bin])
         woe.loc[small_bin] = 0
-        var_woe = pd.Series(woe.loc[var_bin].values,index=var_bin.index)
+        var_woe = pd.Series(woe.loc[var_bin.values].values,index=data.index)
         return var_bin,var_woe,bin_labels
 
 
@@ -169,6 +171,15 @@ class WideTable:
                 self.logger.log(logging.DEBUG,info)
                 return jsonify({"df":stats.to_dict(orient="records"),"info":info})
 
+        @app.route("/qcut",methods=["POST"])
+        def var_qcut():
+            var = request.args.get("var","")
+            data = json.loads(request.data)
+            qcut = int(data.get("qcut_num"))
+            stats, info = self.var_stat(var,qcut=qcut)
+            return jsonify({"df":stats.to_dict(orient="records"),"info":info})
+
+
         @app.route('/shutdown',methods=['GET'])
         def shutdown():
             func = request.environ.get('werkzeug.server.shutdown')
@@ -184,6 +195,7 @@ class WideTable:
         t.setDaemon(True)
         t.start()
         print(f'server running on {kwargs.get("host","127.0.0.1")}:{kwargs.get("port",50000)}')
+        return t
         # app.run(host="0.0.0.0",port=50000)
 
 
@@ -196,7 +208,7 @@ if __name__ == "__main__":
     data1.head()
     wt = WideTable(data1)
 
-    wt.run_app()
-
+    t = wt.run_app(port=60006)
+    t.join()
   
 

@@ -34,9 +34,18 @@
   <!-- <h3>chart</h3> -->
   <div class="chart_container">
     <div id="chart1" style="width: 600px;height:400px; float:left; margin-right:50px"></div>
-    <table id="splits",style="float:left">
-      <tr><th>splits:</th></tr>
-    </table>
+    <div style="float:left; margin-right: 50px">
+      <table id="splits",>
+        <tr><th>splits:</th></tr>
+      </table>
+    </div>
+    <div style="float:left">
+      <table id="category">
+        <tr><th>category:</th></tr>
+        <!-- button: add text input row-->
+        <tr><td><button id="add_category">add</button></td></tr>
+      </table>
+    </div>
   </div>
   
   <script>
@@ -46,27 +55,26 @@
       if (r != null) return decodeURI(r[2]); return null;
     }
 
-    // function getPrecision(v){
-    //   let _v = Number(v);
-    //   let s = Number(v).toString();
-    
-    //   if (s.indexOf('.') === -1){
-    //     let i=1;
-    //     while(_v % i === 0){
-    //         i *= 10;
-    //     }
-    //     return i / 10;
-    //   }else{
-
-    //     let res = "0.";
-    //     let i = 0;
-    //     while(i<s.length - s.indexOf('.') - 2){
-    //       res = res + "0";
-    //       i++;
-    //     }
-    //     return Number(res + "1");
-    //   }     
-    // }
+    function guessPrecision(v){
+      // guess precision of a number
+      // return 0.01 for 0.12, 10 for 1230, 100 for 1200, 0.0001 for 0.1234
+      let v_str = v.toString();
+      let v_str_split = v_str.split(".");
+      if (v_str_split.length === 1){
+        // count zeros in the end
+        let count = 0;
+        for (let i=v_str.length-1; i>=0; i--){
+          if (v_str[i] === "0"){
+            count += 1;
+          }else{
+            break;
+          }
+        } 
+        return Math.pow(10,count);
+      }else{
+        return 1/Math.pow(10,v_str_split[1].length);
+      }
+    }
 
 
     inf = Infinity;
@@ -95,6 +103,8 @@
       });
     });
 
+
+
     $("#qcut").click(function () {
       let qcut_num = Number($("#qcut_num").val());
       $.ajax({
@@ -111,6 +121,28 @@
           console.log("update data error");
           console.log(message);
         }
+      });
+    });
+
+    $("#reset_").nextAll().on("keyup", event => {
+      if(event.key !== "Enter") return; 
+      $("#reset_").click(); 
+      event.preventDefault(); 
+    });
+    $("#qcut_num").on("keyup", event => {
+      if(event.key !== "Enter") return; 
+      $("#qcut").click(); 
+      event.preventDefault(); 
+    });
+
+    $("#add_category").click(function(){
+      // add text input row and remove button
+      let input_td = "<td><input type='text' class='category_input' style='width:100px;'></td>";
+      let remove_td = "<td><button class='remove_category'>remove</button></td>";
+      $("#add_category").before("<tr>"+input_td+remove_td+"</tr>");
+      // add remove button click event
+      $(".remove_category").click(function(){
+        $(this).parent().parent().remove();
       });
     });
 
@@ -152,11 +184,17 @@
       for (let i = 0; i < data.info.splits.length; i++) {
         $("#splits").append("<tr><td>" + data.info.splits[i] + "</td></tr>");
       }
-
+      slider_step = Math.min(...data.info.splits.map(v=>guessPrecision(v)));
+      slider_stp = Math.max(slider_step,0.0001);
       $("#min_").val(slider_min);
       $("#max_").val(slider_max);
       $("#step_").val(slider_step);
 
+      $(".range-slider__point").remove();
+      slider.points=[];
+      slider.allProps.values = data.info.splits;
+      slider.allProps.values.forEach(v=>slider.addPoint(v));
+      slider.allProps.step = slider_step;
       chart1.setOption({
         xAxis: [
           {
@@ -272,6 +310,9 @@
           // interval: 500,
           axisLabel: {
             formatter: '{value} '
+          },
+          splitLine: {
+            show: false
           }
         },
         {
@@ -298,7 +339,7 @@
             itemStyle: {
               color: '#73c0de'
             }
-          }
+          },
           // data: nobs
         },
         {
