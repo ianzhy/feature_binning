@@ -2,7 +2,7 @@
 ###
 # Project: feature_binning
 # Created Date: Friday, October 13th 2023, 2:38:37 pm
-# Last Modified: Wed Oct 25 2023
+# Last Modified: Wed Nov 08 2023
 # Modified By: !an
 # Author: !an <ianzy@outlook.com>
 ###
@@ -47,14 +47,22 @@ dictConfig({
 
 
 class WideTable:
-    def __init__(self,df,bin_cache_file="./bin_info.csv"):
+    def __init__(self,df,bin_cache_file="./bin_info.csv",label_mapping=None):
+        if "target" not in df.columns:
+            print("target column not found,failed to init WideTable")
+            raise
+
+        self.logger = logging.getLogger("werkzeug")
         self.df = df.loc[df["target"].notnull()]
         if os.path.exists(bin_cache_file):
             self.bin_info = pd.read_csv(bin_cache_file,index_col=0)
         else:
+            print("bin cache file not found, create a new one")
             self.bin_info = pd.DataFrame(columns=range(50))
+            self.bin_info.to_csv("./bin_info.csv")
 
-        self.logger = logging.getLogger("werkzeug")
+        self.label_mapping = label_mapping or {}
+
 
     def var_stat(self,var,splits=None,qcut=None,update_bin=True):
         min_edge,max_edge = self.df[var].replace([np.inf,-np.inf],[np.nan,np.nan]).apply(["min","max"])
@@ -94,6 +102,7 @@ class WideTable:
         # if splits[-1] > max_edge: splits[-1] = max_edge
         info = {
             "var":var,
+            "var_label":self.label_mapping.get(var,""),
             "splits":splits, # left edge not needed, only the splits
             "max":max_edge,
             "min":min_edge,
@@ -103,7 +112,7 @@ class WideTable:
                 
         return stats, info
 
-    def var_woe(self,data,var):
+    def var_cut(self,data,var,calculate_woe=True):
         if var not in self.bin_info.index:
             raise Exception(f"{var} not in bin_info")
         bins = self.bin_info.loc[var].dropna().drop_duplicates().values
@@ -112,22 +121,29 @@ class WideTable:
         categories = pd.cut(data[var],bins,include_lowest=True)
         var_bin = categories.cat.codes
         bin_labels = {i:label for i,label in enumerate(categories.cat.categories.astype(str))}
-        count = data.groupby(var_bin).agg({"target":[
-            "count",                # number of observations
-            # "mean",                 # bad_rate
-            lambda x:(x==1).sum(),  # number of bads
-            lambda x:(x==0).sum(),  # number of goods
-        ]})
-        count.columns = "total,bad,good".split(",")
-        rate = count/count.sum()
-        woe = np.log((rate["bad"]+0.001)/(rate["good"]+0.001))
-        small_bin = rate["total"]<0.005
-        if small_bin.any():
-            print("woes set to zero for very small bins")
-            print(count.loc[small_bin])
-        woe.loc[small_bin] = 0
-        var_woe = pd.Series(woe.loc[var_bin.values].values,index=data.index)
-        return var_bin,var_woe,bin_labels
+        if calculate_woe:
+            if "target" not in data.columns:
+                raise Exception("target column not found, can't calculate woe")
+            count = data.groupby(var_bin).agg({"target":[
+                "count",                # number of observations
+                # "mean",                 # bad_rate
+                lambda x:(x==1).sum(),  # number of bads
+                lambda x:(x==0).sum(),  # number of goods
+            ]})
+            count.columns = "total,bad,good".split(",")
+            rate = count/count.sum()
+            woe = np.log((rate["bad"]+0.001)/(rate["good"]+0.001))
+            small_bin = rate["total"]<0.005
+            if small_bin.any():
+                print(f"{var}: woes set to zero for very small bins")
+                print(count.loc[small_bin])
+            woe.loc[small_bin] = 0
+            woe_bin_mapping = woe.to_dict()
+            var_woe = pd.Series(woe.loc[var_bin.values].values,index=data.index)
+            return var_bin,bin_labels,var_woe,woe_bin_mapping
+        else:
+            return var_bin,bin_labels
+
 
 
     def update_bin(self,var,bins):

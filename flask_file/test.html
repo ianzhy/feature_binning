@@ -8,14 +8,22 @@
 </head>
 
 <body>
-  <div class="info" >
+  <div class="header" style="display:block">
+    <h2 style="margin-bottom:2px"><span id="header_name"></span>
+    <button id="get_new" style="margin-left:100px">跳转</button>
+    <input type="text" id="new_name" style="width: 200px">
+    </h2>
+  </div>
+  
+  <div class="info" style="display: block">
     <h3 style="float: left">splits iv: <span id="iv"></span> 
+
       <!-- qcut button with warning, float left -->
       <button id="qcut" style="margin-left:100px">qcut</button>
       <input type="number" id="qcut_num" value="10" step="1" style="width:40px">
 
     </h3> 
-    <h4 style="float:right; margin-right: 50px;">
+    <h4 style="float:right; margin-right: 50px">
       <!-- reset button -->
       <button id="reset_">set xAxis</button>
 
@@ -91,6 +99,12 @@
       "max": slider_max
     });
     console.log(data);
+
+    $("#get_new").click(function(){
+      let new_name = $("#new_name").val();
+      window.location.href = "/test?var="+new_name;
+    });
+
 
     $("#reset_").click(function () {
       slider_min = Number($("#min_").val());
@@ -177,6 +191,7 @@
 
     function update_data(rsp) {
       data = rsp;
+      $("#header_name").text(data.info.var+"【"+data.info.var_label+"】");
       $("#iv").text(data.info.iv.toFixed(4));
       // data.info.splits: update splits table
       $("#splits").empty();
