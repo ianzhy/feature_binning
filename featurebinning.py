@@ -2,7 +2,7 @@
 ###
 # Project: feature_binning
 # Created Date: Friday, October 13th 2023, 2:38:37 pm
-# Last Modified: Wed Nov 08 2023
+# Last Modified: Tue Nov 21 2023
 # Modified By: !an
 # Author: !an <ianzy@outlook.com>
 ###
@@ -47,7 +47,7 @@ dictConfig({
 
 
 class WideTable:
-    def __init__(self,df,bin_cache_file="./bin_info.csv",label_mapping=None):
+    def __init__(self,df,refs=None,bin_cache_file="./bin_info.csv",label_mapping=None):
         if "target" not in df.columns:
             print("target column not found,failed to init WideTable")
             raise
@@ -61,6 +61,7 @@ class WideTable:
             self.bin_info = pd.DataFrame(columns=range(50))
             self.bin_info.to_csv("./bin_info.csv")
 
+        self.refs = refs or []
         self.label_mapping = label_mapping or {}
 
 
@@ -69,6 +70,7 @@ class WideTable:
         if qcut is not None:
             categories, bins = pd.qcut(self.df[var], qcut,retbins=True,duplicates="drop")
         elif splits is not None: 
+            # TODO: check if all splits is valid
             bins = [min_edge-0.001] + sorted(splits) + [max_edge+0.001]
             bins = np.unique(bins)
             categories = pd.cut(self.df[var], bins=bins,include_lowest=True)
@@ -82,35 +84,41 @@ class WideTable:
 
         if update_bin:
             self.update_bin(var,bins)
-                
-        
-        stats = self.df.groupby(categories.cat.codes).agg({"target":[
-            "count",                # number of observations
-            "mean",                 # bad_rate
-            lambda x:(x==1).sum(),  # number of bads
-            lambda x:(x==0).sum(),  # number of goods
-        ]})
-        stats = stats.reset_index()
-        stats.columns = ["bin","nobs","bad_rate","bad","good"]
-        total_bad,total_good = stats["bad"].sum(), stats["good"].sum()
-        stats["woe"] = stats.apply(lambda x:np.log((x["bad"]+1)/total_bad)-np.log((x["good"]+1)/total_good),axis=1)
-        stats["iv"] = stats["woe"]*(stats["bad"]/total_bad-stats["good"]/total_good)
-        
-        stats["interval"] = stats["bin"].map(lambda x:str(categories.cat.categories[x]) if x>=0 else "N/A") 
-        splits = list(categories.cat.categories.right)[:-1]
-        # if splits[0] < min_edge: splits[0] = min_edge
-        # if splits[-1] > max_edge: splits[-1] = max_edge
+
+        stats_list = []        
+        for i,idf in enumerate([self.df, *self.refs]):
+            categories = pd.cut(idf[var], bins=bins,include_lowest=True)
+            stats = idf.groupby(categories.cat.codes).agg({"target":[
+                "count",                # number of observations
+                "mean",                 # bad_rate
+                ("bad",lambda x:(x==1).sum()),  # number of bads
+                ("good",lambda x:(x==0).sum()),  # number of goods
+            ]})
+            stats = stats.reset_index()
+            stats.columns = ["bin","nobs","bad_rate","bad","good"]
+            total_bad,total_good = stats["bad"].sum(), stats["good"].sum()
+            stats["woe"] = stats.apply(lambda x:np.log((x["bad"]+1)/total_bad)-np.log((x["good"]+1)/total_good),axis=1)
+            stats["iv"] = stats["woe"]*(stats["bad"]/total_bad-stats["good"]/total_good)
+            
+            stats["interval"] = stats["bin"].map(lambda x:str(categories.cat.categories[x]) if x>=0 else "N/A") 
+            stats_list.append(stats)
+            if i==0:
+                splits = list(categories.cat.categories.right)[:-1]
+                # if splits[0] < min_edge: splits[0] = min_edge
+                # if splits[-1] > max_edge: splits[-1] = max_edge
+
         info = {
             "var":var,
             "var_label":self.label_mapping.get(var,""),
             "splits":splits, # left edge not needed, only the splits
             "max":max_edge,
             "min":min_edge,
-            "iv":stats["iv"].sum(),
-            "total":int(stats["nobs"].sum()),    
+            "iv":stats_list[0]["iv"].sum(),
+            "total":int(stats_list[0]["nobs"].sum()),
+            "refs":[idf.to_dict(orient="records") for idf in stats_list[1:]],    
         }
                 
-        return stats, info
+        return stats_list[0].to_dict(orient="records"), info
 
     def var_cut(self,data,var,calculate_woe=True):
         if var not in self.bin_info.index:
@@ -127,8 +135,8 @@ class WideTable:
             count = data.groupby(var_bin).agg({"target":[
                 "count",                # number of observations
                 # "mean",                 # bad_rate
-                lambda x:(x==1).sum(),  # number of bads
-                lambda x:(x==0).sum(),  # number of goods
+                ("bad",lambda x:(x==1).sum()),  # number of bads
+                ("good",lambda x:(x==0).sum()),  # number of goods
             ]})
             count.columns = "total,bad,good".split(",")
             rate = count/count.sum()
@@ -176,7 +184,7 @@ class WideTable:
                     stats, info = self.var_stat(var)
                 return render_template(
                     "test.html",
-                    data=Markup({"df":stats.to_dict(orient="records"),"info":info})
+                    data=Markup({"df":stats,"info":info})
                 )
             else:
                 var = request.args.get("var","")
@@ -185,7 +193,7 @@ class WideTable:
                 stats, info = self.var_stat(var,splits)
                 self.logger.log(logging.DEBUG,stats)
                 self.logger.log(logging.DEBUG,info)
-                return jsonify({"df":stats.to_dict(orient="records"),"info":info})
+                return jsonify({"df":stats,"info":info})
 
         @app.route("/qcut",methods=["POST"])
         def var_qcut():
@@ -193,7 +201,7 @@ class WideTable:
             data = json.loads(request.data)
             qcut = int(data.get("qcut_num"))
             stats, info = self.var_stat(var,qcut=qcut)
-            return jsonify({"df":stats.to_dict(orient="records"),"info":info})
+            return jsonify({"df":stats,"info":info})
 
 
         @app.route('/shutdown',methods=['GET'])

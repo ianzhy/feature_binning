@@ -40,14 +40,14 @@
   <div class="slider"></div>
 
   <!-- <h3>chart</h3> -->
-  <div class="chart_container">
-    <div id="chart1" style="width: 600px;height:400px; float:left; margin-right:50px"></div>
-    <div style="float:left; margin-right: 50px">
+  <div class="chart_container" id="chart_container1" style="display: block">
+    <div id="chart1" style="width: 600px;height:400px; margin-right:50px; display: inline-block"></div>
+    <div style="display: inline-block;vertical-align:top; margin-right: 50px">
       <table id="splits",>
         <tr><th>splits:</th></tr>
       </table>
     </div>
-    <div style="float:left">
+    <div style="display: inline-block;vertical-align:top">
       <table id="category">
         <tr><th>category:</th></tr>
         <!-- button: add text input row-->
@@ -56,6 +56,10 @@
     </div>
   </div>
   
+  <div class="chart_container" id="chart_container2" style="display: block">
+
+  </div>
+
   <script>
     function getUrlParam(name) {
       var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
@@ -225,6 +229,38 @@
           }
         ]
       });
+
+
+      if(data.info.refs.length === 0){
+        $("#chart_container2").empty();
+      }
+      
+      // if data.info.refs is not empty, add more chart
+      for(let i=0; i<data.info.refs.length; i++){
+        // if #chart2 does not exist, create it
+        if($("#chart"+(i+2)).length === 0){
+          $("#chart_container2").append("<div id='chart"+(i+2)+"' style='width: 600px;height:400px; margin-right:50px; display:inline-block'></div>");
+          
+        }
+        let chart = echarts.init(document.getElementById('chart'+(i+2)));
+        chart.setOption(option);
+        chart.setOption({
+          xAxis: [
+            {
+              data: data.info.refs[i].map(function (item) { return item.interval }),
+            }
+          ],
+          series: [
+            {
+              data: data.info.refs[i].map(function (item) { return item.nobs })
+            },
+            {
+              data: data.info.refs[i].map(function (item) { return item.bad_rate })
+            }
+          ]
+        });
+      }
+
     }
 
     function valueInInterval(interval,value){

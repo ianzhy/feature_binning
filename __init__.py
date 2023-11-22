@@ -1,0 +1,1 @@
+from .featurebinning import WideTable
