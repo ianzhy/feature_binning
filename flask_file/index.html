@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Feature Binning Server</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dropdown-list.css') }}">
+  <!-- jquery -->
+  <script src="{{ url_for('static', filename='jquery.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='dropdown-list.js') }}"></script>
+
+</head>
+
+<body>
+  <h1>Feature Binning Server</h1>
+
+  <div class="dropdown">
+    <button onclick="dropdownFunction()" class="dropbtn">选择因子</button>
+    <div id="myDropdown" class="dropdown-content">
+      <input type="text" placeholder="Search.." id="dropdownInput" onkeyup="filterFunction()">
+      <!-- <a href="?var=var1">var1</a> -->
+    </div>
+  </div>
+
+  <h3>&nbsp;&nbsp;&nbsp;&nbsp;data describe:</h3>
+  <b>shape:&nbsp;{{data_shape}}</b>
+  {{data_description | safe}}
+
+  <h3>&nbsp;&nbsp;&nbsp;&nbsp;refs:</h3>
+  {{refs_info}}
+
+
+  <script>
+
+    var_list = {{ var_list }};
+
+    for (let i = 0; i < var_list.length; i++) {
+      let var_name = var_list[i];
+      let a = document.createElement("a");
+      a.href = "/test?var=" + var_name;
+      a.textContent = var_name;
+      document.getElementById("myDropdown").appendChild(a);
+    }
+
+  </script>
+
+</body>
+
+</html>

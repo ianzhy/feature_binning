@@ -1,17 +1,35 @@
-<head>
+<!DOCTYPE html><html lang="zh-CN">
+  <head>
+  <meta charset="UTF-8">
+  <title>Feature Binning Server</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='range-slider.css') }}?version=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dropdown-list.css') }}">
   <!-- jquery -->
   <script src="{{ url_for('static', filename='jquery.min.js') }}"></script>
   <script src="{{ url_for('static', filename='echarts.min.js') }}"></script>
   <!-- local src -->
   <script src="{{ url_for('static', filename='range-slider.js') }}"></script>
+  <script src="{{ url_for('static', filename='dropdown-list.js') }}"></script>
+  
 </head>
 
 <body>
   <div class="header" style="display:block">
-    <h2 style="margin-bottom:2px"><span id="header_name"></span>
-    <button id="get_new" style="margin-left:100px">跳转</button>
-    <input type="text" id="new_name" style="width: 200px">
+    <h2 style="margin-bottom:2px">
+    <!-- <button id="get_new" style="margin-left:100px">跳转</button>
+    <input type="text" id="new_name" style="width: 200px"> -->
+    <div class="dropdown">
+      <button onclick="dropdownFunction()" class="dropbtn">选择因子</button>
+      <div id="myDropdown" class="dropdown-content">
+        <input type="text" placeholder="Search.." id="dropdownInput" onkeyup="filterFunction()">
+        <!-- <a href="?var=var1">var1</a>
+        <a href="?var=var2">var2</a>
+        <a href="?var=var3">var3</a>
+        <a href="?var=var4">var4</a>
+        <a href="?var=var5">var5</a> -->
+      </div>
+    </div>
+    <span id="header_name" title="通过WideTable.label_mapping设置中文说明"></span>
     </h2>
   </div>
   
@@ -41,19 +59,34 @@
 
   <!-- <h3>chart</h3> -->
   <div class="chart_container" id="chart_container1" style="display: block">
-    <div id="chart1" style="width: 600px;height:400px; margin-right:50px; display: inline-block"></div>
+    <div id="chart1" style="width: 800px;height:400px; margin-right:50px; display: inline-block"></div>
     <div style="display: inline-block;vertical-align:top; margin-right: 50px">
       <table id="splits",>
         <tr><th>splits:</th></tr>
       </table>
     </div>
-    <div style="display: inline-block;vertical-align:top">
+    <!-- <div style="display: inline-block;vertical-align:top">
       <table id="category">
         <tr><th>category:</th></tr>
-        <!-- button: add text input row-->
         <tr><td><button id="add_category">add</button></td></tr>
       </table>
+    </div> -->
+    <div style="display: inline-block;vertical-align:top">
+      <table id="mapping">
+        <tr><th><button id='value_mapping'>update value mapping:</button></th></tr>
+        <tr><td>
+          <label for="null_map">
+            <input type="checkbox" id="null_map_activaitor" onclick="var input = document.getElementById('null_map'); if(this.checked){ input.disabled = false; input.focus();}else{input.disabled=true;}" 
+              title="map null to another value before binning"/>
+            null map to:
+          </label>
+          <input type="number" id="null_map" name="null_map" style='width:100px;' disabled=true/>
+        </td></tr>
+        <tr><td><button id="add_mapping">add</button></td></tr>
+      </table>
     </div>
+
+
   </div>
   
   <div class="chart_container" id="chart_container2" style="display: block">
@@ -84,7 +117,7 @@
         } 
         return Math.pow(10,count);
       }else{
-        return 1/Math.pow(10,v_str_split[1].length);
+        return Math.max(0.000001,1/Math.pow(10,v_str_split[1].length));
       }
     }
 
@@ -104,11 +137,10 @@
     });
     console.log(data);
 
-    $("#get_new").click(function(){
-      let new_name = $("#new_name").val();
-      window.location.href = "/test?var="+new_name;
-    });
-
+    // $("#get_new").click(function(){
+    //   let new_name = $("#new_name").val();
+    //   window.location.href = "/test?var="+new_name;
+    // });
 
     $("#reset_").click(function () {
       slider_min = Number($("#min_").val());
@@ -121,7 +153,14 @@
       });
     });
 
-
+    // update dropdown list according to data.var_list
+    for (let i = 0; i < data.var_list.length; i++) {
+      let var_name = data.var_list[i];
+      let a = document.createElement("a");
+      a.href = "?var=" + var_name;
+      a.textContent = var_name;
+      document.getElementById("myDropdown").appendChild(a);
+    }
 
     $("#qcut").click(function () {
       let qcut_num = Number($("#qcut_num").val());
@@ -153,17 +192,75 @@
       event.preventDefault(); 
     });
 
-    $("#add_category").click(function(){
+    // $("#add_category").click(function(){
+    //   // add text input row and remove button
+    //   let input_td = "<td><input type='text' class='category_input' style='width:100px;'></td>";
+    //   let remove_td = "<td><button class='remove_category'>remove</button></td>";
+    //   $("#add_category").before("<tr>"+remove_td+input_td+"</tr>");
+    //   // add remove button click event
+    //   $(".remove_category").click(function(){
+    //     $(this).parent().parent().remove();
+    //   });
+    // });
+
+    $("#add_mapping").click(add_mapping);
+
+    function add_mapping(){
       // add text input row and remove button
-      let input_td = "<td><input type='text' class='category_input' style='width:100px;'></td>";
-      let remove_td = "<td><button class='remove_category'>remove</button></td>";
-      $("#add_category").before("<tr>"+input_td+remove_td+"</tr>");
+      let input_td = ("<td class='mapping_input'>" 
+        // checkbox checked to indicate the range is closed, unchecked to indicate the range is open, therefor the after <b> is changed accordingly
+        +"<input type='checkbox' title='check for >=' onclick='if(this.checked){$(this.nextSibling).text(\"&nbsp [ &nbsp\")}else{$(this.nextSibling).text(\"&nbsp ( &nbsp\")}'/>" 
+        + "<b>&nbsp ( &nbsp</b>"
+        +"<input type='number'  style='width:100px;'>"
+        +", &nbsp"
+        +"<input type='number'  style='width:100px;'>"
+        +"<b>&nbsp ) &nbsp</b>"
+        +"<input type='checkbox' title='check for <=' onclick='if(this.checked){$(this.previousSibling).text(\"&nbsp ] &nbsp\")}else{$(this.previousSibling).text(\"&nbsp ) &nbsp\")}'/>"
+        +"&nbsp --> &nbsp" 
+        +"<input type='number'  style='width:100px;'></td>");
+      let remove_td = "<td><button class='remove_mapping'>remove</button></td>";
+      $("#add_mapping").before("<tr>"+remove_td+input_td+"</tr>");
       // add remove button click event
-      $(".remove_category").click(function(){
+      $(".remove_mapping").click(function(){
         $(this).parent().parent().remove();
+      });
+    }
+
+    $("#value_mapping").click(function(){
+      let mapping = getValueMapping();
+      console.log(mapping);
+      // return;
+      $.ajax({
+        url: "/update_mapping?var=" + data.info.var,
+        type: "POST",
+        data: JSON.stringify(mapping),
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        success: function (rsp) {
+          // console.log(rsp);
+          update_data(rsp);
+          console.log("update value_mapping success");
+        },
+        error: function (message) {
+          console.log("update value_mapping error");
+          console.log(message);
+        }
       });
     });
 
+    function getValueMapping(){
+      var mapping = {};
+      if ($("#null_map_activaitor")[0].checked){
+        mapping["null_map"] = $("#null_map")[0].valueAsNumber;
+      }
+      for (let i=0; i<$(".mapping_input").length; i++){
+        let row = $(".mapping_input")[i];
+        mapping["vm_"+i] = [row.children[0].checked, row.children[2].valueAsNumber, row.children[3].valueAsNumber, row.children[5].checked, +row.children[6].valueAsNumber];
+      }
+      return mapping;
+    }
+    
+  
 
     slider.onChange(function () {
       if (slider.getValues().sort().toString() === data.info.splits.sort().toString()) {
@@ -180,8 +277,8 @@
           contentType: "application/json; charset=utf-8",
           dataType: "json",
           success: function (rsp) {
-            console.log("update data success");
             update_data(rsp);
+            console.log("update data success");
           },
           error: function (message) {
             console.log("update data error");
@@ -195,7 +292,7 @@
 
     function update_data(rsp) {
       data = rsp;
-      $("#header_name").text(data.info.var+"【"+data.info.var_label+"】");
+      $("#header_name").text(data.info.var+"【"+(data.info.var_label?data.info.var_label:"未设置label")+"】");
       $("#iv").text(data.info.iv.toFixed(4));
       // data.info.splits: update splits table
       $("#splits").empty();
@@ -209,6 +306,42 @@
       $("#max_").val(slider_max);
       $("#step_").val(slider_step);
 
+      // data.info.value_maps: update mapping table
+      if("null_map" in data.info.value_maps){
+        $("#null_map_activaitor")[0].checked = true;
+        $("#null_map")[0].value = data.info.value_maps["null_map"];
+      }else{
+        $("#null_map_activaitor")[0].checked = false;
+        $("#null_map")[0].value = "";
+      }
+      // loop: vm_0, vm_1, ...
+      for (let i=0; i<inf; i++){
+        let key = "vm_"+i;
+        if(key in data.info.value_maps){
+          let value = data.info.value_maps[key];
+          // add row if not exist
+          if(i >= $(".mapping_input").length){
+            add_mapping();
+          }
+          let row = $(".mapping_input")[i];
+          row.children[0].checked = value[0];
+          row.children[2].value = value[1];
+          row.children[3].value = value[2];
+          row.children[5].checked = value[3];
+          row.children[6].value = value[4];
+        }else{
+          // remove rows not needed
+          for (let j=$(".mapping_input").length-1; j>=i; j--){
+            $(".mapping_input")[j].remove();
+            $(".remove_mapping")[j].remove();
+          }
+          break;
+        }
+      }
+
+
+
+
       $(".range-slider__point").remove();
       slider.points=[];
       slider.allProps.values = data.info.splits;
@@ -216,7 +349,7 @@
       slider.allProps.step = slider_step;
       chart1.setOption({
         xAxis: [
-          {
+          { 
             data: data.df.map(function (item) { return item.interval }),
           }
         ],
@@ -232,17 +365,26 @@
 
 
       if(data.info.refs.length === 0){
+        // unset highlight and downplay event
+
         $("#chart_container2").empty();
+        clearBoundedHandlers(slider);
+        boundHandlers(slider,chart1);
+
       }
       
       // if data.info.refs is not empty, add more chart
       for(let i=0; i<data.info.refs.length; i++){
         // if #chart2 does not exist, create it
         if($("#chart"+(i+2)).length === 0){
-          $("#chart_container2").append("<div id='chart"+(i+2)+"' style='width: 600px;height:400px; margin-right:50px; display:inline-block'></div>");
+          $("#chart_container2").append("<div id='chart"+(i+2)+"' style='width: 800px;height:400px; margin-right:50px; display:inline-block'></div>");
           
         }
         let chart = echarts.init(document.getElementById('chart'+(i+2)));
+        // set hightlight and downplay event
+        // slider.mouseOverHandlers.push((index, value) => highlight_bar(chart, value));
+        // slider.mouseOutHandlers.push((index, value) => downplay_bar(chart));
+
         chart.setOption(option);
         chart.setOption({
           xAxis: [
@@ -259,6 +401,7 @@
             }
           ]
         });
+        boundHandlers(slider,chart);
       }
 
     }
@@ -292,10 +435,19 @@
       });
     }
 
-    var chart1 = echarts.init(document.getElementById('chart1'));
+    
+    function boundHandlers(slider,chart){
+      slider.mouseOverHandlers.push((index, value) => highlight_bar(chart, value));
+      slider.mouseOutHandlers.push((index, value) => downplay_bar(chart));
+    }
 
-    slider.mouseOverHandlers.push((index, value) => highlight_bar(chart1, value));
-    slider.mouseOutHandlers.push((index, value) => downplay_bar(chart1));
+    function clearBoundedHandlers(slider){
+      slider.mouseOverHandlers = [];
+      slider.mouseOutHandlers = [];
+    }
+    
+    var chart1 = echarts.init(document.getElementById('chart1'));
+    boundHandlers(slider,chart1);
 
 
     // echart
@@ -346,6 +498,10 @@
       xAxis: [
         {
           type: 'category',
+          axisLabel: { 
+            // rotate: 15, 
+            interval: 0 
+          },
           // data: intervals,
           axisPointer: {
             type: 'shadow'
@@ -412,3 +568,5 @@
 
   </script>
 </body>
+
+</html>

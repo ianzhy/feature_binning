@@ -33,6 +33,8 @@ function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _d
 */
 
 function roundToStep(value, step) {
+  // console.log(value);
+  // console.log(step);
   v = Math.round(value/step)*step;
   if(step<1 && String(v).split(".")[1] && String(v).split(".")[1].length>10){
     v = Number(v.toFixed(String(step).split(".")[1].length));
